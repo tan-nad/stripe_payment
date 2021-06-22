@@ -3,9 +3,23 @@
     <!-- Base application theme. -->
     <style name="AppTheme" parent="Theme.AppCompat.Light.DarkActionBar">
         <!-- Customize your theme here. -->
-        <item name="colorPrimary">@color/colorPrimary</item>
-        <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
-        <item name="colorAccent">@color/colorAccent</item>
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryDark">@color/primaryDark</item>
+        <item name="colorAccent">@color/accent</item>
+    </style>
+
+    <style name="StripeDefaultTheme" parent="StripeBaseTheme">
+        <!-- Applied to toolbar background -->
+        <item name="colorPrimary">@color/primary</item>
+
+<!--        &lt;!&ndash; Applied to status bar &ndash;&gt;-->
+<!--        <item name="colorPrimaryDark">@color/primaryDark</item>-->
+
+        <!--
+            Applied to selected Payment Method; active field; links;
+            add new Payment Method call-to-action
+        -->
+        <item name="colorAccent">@color/primary</item>
     </style>
 
 </resources>

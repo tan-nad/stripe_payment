@@ -1,12 +1,13 @@
 package com.gettipsi.stripe;
 
 import android.app.Activity;
-import android.content.DialogInterface;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.text.TextUtils;
 
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -16,6 +17,7 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 import com.facebook.react.bridge.ReadableMap;
+import com.facebook.react.bridge.WritableMap;
 import com.gettipsi.stripe.util.ArgCheck;
 import com.gettipsi.stripe.util.Converters;
 import com.gettipsi.stripe.util.Fun0;
@@ -35,14 +37,13 @@ import com.stripe.android.model.Source;
 import com.stripe.android.model.SourceParams;
 import com.stripe.android.model.StripeIntent;
 import com.stripe.android.model.Token;
+import com.stripe.android.view.AddPaymentMethodActivityStarter;
+import com.stripe.android.view.BillingAddressFields;
 
 import java.util.HashMap;
 import java.util.Map;
 
-import de.jonasbark.stripepayment.StripeDialog;
 import io.flutter.plugin.common.PluginRegistry;
-import kotlin.Unit;
-import kotlin.jvm.functions.Function1;
 
 import static com.gettipsi.stripe.Errors.AUTHENTICATION_FAILED;
 import static com.gettipsi.stripe.Errors.CANCELLED;
@@ -246,25 +247,83 @@ public class StripeModule extends ReactContextBaseJavaModule {
     try {
       ArgCheck.nonNull(currentActivity);
       ArgCheck.notEmptyString(mPublicKey);
-      final StripeDialog cardDialog = StripeDialog.newInstance(
-        "",
-              mStripeAccountId
-      );
-      cardDialog.setStripeInstance(mStripe);
-      cardDialog.setTokenListener(new Function1<PaymentMethod, Unit>() {
+
+      ActivityEventListener ael = new BaseActivityEventListener() {
         @Override
-        public Unit invoke(PaymentMethod paymentMethod) {
-          promise.resolve(Converters.convertPaymentMethodToWritableMap(paymentMethod));
-          return Unit.INSTANCE;
-        }
-      });
-      cardDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
-        @Override
-        public void onCancel(DialogInterface dialog) {
+        public void onActivityResult(Activity a, int requestCode, int resultCode, Intent data) {
+          if (requestCode != AddPaymentMethodActivityStarter.REQUEST_CODE || resultCode != Activity.RESULT_OK || data == null) {
+            return;
+          }
+
+          final AddPaymentMethodActivityStarter.Result result =
+                  AddPaymentMethodActivityStarter.Result.fromIntent(data);
+
+          if (result instanceof AddPaymentMethodActivityStarter.Result.Success) {
+            final AddPaymentMethodActivityStarter.Result.Success successResult =
+                    (AddPaymentMethodActivityStarter.Result.Success) result;
+
+            final WritableMap map = Converters.convertPaymentMethodToWritableMap(successResult.getPaymentMethod());
+
+            promise.resolve(map);
+            return;
+          }
+
           promise.reject(CANCELLED, CANCELLED);
         }
-      });
-      cardDialog.show(currentActivity.getFragmentManager(), "AddNewCard");
+
+        @Override
+        public void onActivityResult(int requestCode, int resultCode, Intent data) {
+          onActivityResult(null, requestCode, resultCode, data);
+        }
+      };
+
+      addActivityEventListener(ael);
+
+      new AddPaymentMethodActivityStarter(currentActivity).startForResult(
+        new AddPaymentMethodActivityStarter.Args.Builder()
+                .setPaymentMethodType(PaymentMethod.Type.Card)
+                .setBillingAddressFields(BillingAddressFields.None)
+                .build()
+      );
+
+//      final StripeDialog cardDialog = StripeDialog.newInstance(
+//        "",
+//              mStripeAccountId
+//      );
+//      cardDialog.setStripeInstance(mStripe);
+
+//      ActivityResultLauncher mGetContent = registerForActivityResult(
+//          new AddPaymentMethodActivityStarter(currentActivity),
+//          new ActivityResultCallback() {
+//            @Override
+//            public void onActivityResult(Object result) {
+//              System.out.print("--------->");
+//              System.out.println(result);
+////              final AddPaymentMethodActivityStarter.Result result =
+////                      AddPaymentMethodActivityStarter.Result.fromIntent(data);
+////              if (result instanceof AddPaymentMethodActivityStarter.Result.Success) {
+////                final AddPaymentMethodActivityStarter.Result.Success successResult =
+////                        (AddPaymentMethodActivityStarter.Result.Success) result;
+//                // onSuccess
+////            onPaymentMethodResult(successResult.getPaymentMethod());
+////              }
+//            }
+//      });
+
+//      cardDialog.setTokenListener(new Function1<PaymentMethod, Unit>() {
+//        @Override
+//        public Unit invoke(PaymentMethod paymentMethod) {
+//          promise.resolve(Converters.convertPaymentMethodToWritableMap(paymentMethod));
+//          return Unit.INSTANCE;
+//        }
+//      });
+//      cardDialog.setOnCancelListener(new DialogInterface.OnCancelListener() {
+//        @Override
+//        public void onCancel(DialogInterface dialog) {
+//          promise.reject(CANCELLED, CANCELLED);
+//        }
+//      });
+//      cardDialog.show(currentActivity.getFragmentManager(), "AddNewCard");
     } catch (Exception e) {
       promise.reject(toErrorCode(e), e.getMessage());
     }
