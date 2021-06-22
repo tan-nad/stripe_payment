@@ -110,6 +110,7 @@ public class StripeModule extends ReactContextBaseJavaModule {
   private Stripe mStripe;
   private PayFlow mPayFlow;
   private ReadableMap mErrorCodes;
+  private AddPaymentMethodActivityStarter starter;
 
   private final PluginRegistry.ActivityResultListener mActivityEventListener = new PluginRegistry.ActivityResultListener() {
 
@@ -154,6 +155,8 @@ public class StripeModule extends ReactContextBaseJavaModule {
       mErrorCodes = errorCodes;
       getPayFlow().setErrorCodes(errorCodes);
     }
+
+    starter = new AddPaymentMethodActivityStarter(getCurrentActivity());
   }
 
   private PayFlow getPayFlow() {
@@ -251,24 +254,32 @@ public class StripeModule extends ReactContextBaseJavaModule {
       ActivityEventListener ael = new BaseActivityEventListener() {
         @Override
         public void onActivityResult(Activity a, int requestCode, int resultCode, Intent data) {
-          if (requestCode != AddPaymentMethodActivityStarter.REQUEST_CODE || resultCode != Activity.RESULT_OK || data == null) {
-            return;
+          try {
+            if (requestCode != AddPaymentMethodActivityStarter.REQUEST_CODE || resultCode != Activity.RESULT_OK || data == null) {
+              return;
+            }
+
+            final AddPaymentMethodActivityStarter.Result result =
+                    AddPaymentMethodActivityStarter.Result.fromIntent(data);
+
+            if (result instanceof AddPaymentMethodActivityStarter.Result.Success) {
+              final AddPaymentMethodActivityStarter.Result.Success successResult =
+                      (AddPaymentMethodActivityStarter.Result.Success) result;
+
+              final WritableMap map = Converters.convertPaymentMethodToWritableMap(successResult.getPaymentMethod());
+
+              removeActivityEventListener(this);
+              promise.resolve(map);
+              return;
+            }
+
+            removeActivityEventListener(this);
+            promise.reject(CANCELLED, CANCELLED);
+          } catch (Exception e) {
+            removeActivityEventListener(this);
+            e.printStackTrace();
+            promise.reject(toErrorCode(e), e.getMessage());
           }
-
-          final AddPaymentMethodActivityStarter.Result result =
-                  AddPaymentMethodActivityStarter.Result.fromIntent(data);
-
-          if (result instanceof AddPaymentMethodActivityStarter.Result.Success) {
-            final AddPaymentMethodActivityStarter.Result.Success successResult =
-                    (AddPaymentMethodActivityStarter.Result.Success) result;
-
-            final WritableMap map = Converters.convertPaymentMethodToWritableMap(successResult.getPaymentMethod());
-
-            promise.resolve(map);
-            return;
-          }
-
-          promise.reject(CANCELLED, CANCELLED);
         }
 
         @Override
@@ -279,7 +290,7 @@ public class StripeModule extends ReactContextBaseJavaModule {
 
       addActivityEventListener(ael);
 
-      new AddPaymentMethodActivityStarter(currentActivity).startForResult(
+      starter.startForResult(
         new AddPaymentMethodActivityStarter.Args.Builder()
                 .setPaymentMethodType(PaymentMethod.Type.Card)
                 .setBillingAddressFields(BillingAddressFields.None)
